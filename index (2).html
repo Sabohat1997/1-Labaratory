@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dars jadvali tizimi</title>
+<style>
+:root{--bg:#f3f5f4;--panel:#fff;--ink:#1c2b2a;--muted:#5d6f6d;--line:#d8e0de;--side:#16403c;--side-ink:#d6e8e5;--accent:#e0a526;--accent-ink:#2a1e00;--danger:#b3372b;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#101615;--panel:#18211f;--ink:#e6efed;--muted:#93a7a4;--line:#2b3a38;--side:#0c2a27;--side-ink:#c4dcd8;--danger:#e77a6e;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:"Segoe UI",Roboto,system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex}
+aside{width:240px;background:var(--side);color:var(--side-ink);padding:20px 12px;flex-shrink:0;display:flex;flex-direction:column;gap:4px}
+aside h1{font-size:17px;margin:0 8px 18px;line-height:1.3;color:#fff}
+aside button{background:none;border:0;color:inherit;font:inherit;text-align:left;padding:10px 12px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+aside button:hover{background:rgba(255,255,255,.08)}
+aside button.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+aside button span{font-size:12px;opacity:.8}
+main{flex:1;padding:28px 32px;overflow:auto;min-width:0}
+.head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.head h2{margin:0;font-size:22px}
+.tools{display:flex;gap:8px}
+input,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);width:100%}
+.tools input{width:220px}
+.btn{font:inherit;padding:8px 14px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.del{color:var(--danger)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:520px}
+th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line);font-size:14px}
+th{color:var(--muted);font-weight:600;background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td.act{white-space:nowrap;text-align:right}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:10px;padding:22px;width:min(420px,92vw);background:var(--panel);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog h3{margin:0 0 14px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.row{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+@media (max-width:760px){body{flex-direction:column}aside{width:100%;flex-direction:row;overflow-x:auto;padding:10px}aside h1{display:none}aside button{white-space:nowrap}main{padding:18px}}
+</style>
+</head>
+<body>
+<aside>
+  <h1>Dars jadvali tizimi</h1>
+  <nav id="nav" style="display:contents"></nav>
+</aside>
+<main>
+  <div class="head">
+    <h2 id="title"></h2>
+    <div class="tools">
+      <input id="q" type="search" placeholder="Qidirish">
+      <button class="btn primary" id="add">Qo‘shish</button>
+    </div>
+  </div>
+  <div class="wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table><div class="empty" id="empty" hidden></div></div>
+</main>
+
+<dialog id="dlg">
+  <form method="dialog" id="form">
+    <h3 id="dtitle"></h3>
+    <div id="fields"></div>
+    <div class="row">
+      <button type="button" class="btn" id="cancel">Bekor qilish</button>
+      <button type="submit" class="btn primary">Saqlash</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+/* ====== MENYULAR SOZLAMASI ======
+   Yangi menyu qo'shish uchun MENUS ga yangi obyekt qo'shing.
+   type: text | number | time | select (options: [...] yoki ref: 'menyu_kaliti') */
+const DAYS=["Dushanba","Seshanba","Chorshanba","Payshanba","Juma","Shanba"];
+const MENUS={
+  groups:{label:"Guruhlar",single:"guruh",fields:[
+    {k:"name",l:"Guruh nomi",type:"text"},
+    {k:"course",l:"Kurs",type:"select",options:["1","2","3","4"]},
+    {k:"students",l:"Talabalar soni",type:"number"}]},
+  rooms:{label:"Auditoriyalar",single:"auditoriya",fields:[
+    {k:"name",l:"Xona raqami",type:"text"},
+    {k:"cap",l:"Sig‘im (o‘rin)",type:"number"},
+    {k:"kind",l:"Turi",type:"select",options:["Ma’ruza","Amaliy","Laboratoriya","Kompyuter xonasi"]}]},
+  teachers:{label:"O‘qituvchilar",single:"o‘qituvchi",fields:[
+    {k:"name",l:"F.I.Sh.",type:"text"},
+    {k:"dept",l:"Kafedra",type:"text"},
+    {k:"phone",l:"Telefon",type:"text"}]},
+  subjects:{label:"Fanlar",single:"fan",fields:[
+    {k:"name",l:"Fan nomi",type:"text"},
+    {k:"hours",l:"Soatlar soni",type:"number"},
+    {k:"kind",l:"Dars turi",type:"select",options:["Ma’ruza","Amaliy","Laboratoriya","Seminar"]}]},
+  lessons:{label:"Dars vaqtlari",single:"dars",fields:[
+    {k:"group",l:"Guruh",type:"select",ref:"groups"},
+    {k:"subject",l:"Fan",type:"select",ref:"subjects"},
+    {k:"teacher",l:"O‘qituvchi",type:"select",ref:"teachers"},
+    {k:"room",l:"Auditoriya",type:"select",ref:"rooms"},
+    {k:"day",l:"Hafta kuni",type:"select",options:DAYS},
+    {k:"start",l:"Boshlanishi",type:"time"},
+    {k:"end",l:"Tugashi",type:"time"}]}
+};
+
+const KEY="dars-jadvali-v1";
+let db={};try{db=JSON.parse(localStorage.getItem(KEY))||{}}catch(e){}
+/* Namuna ma'lumotlar (faqat birinchi ochilishda). Kerak bo'lmasa SEED ni o'chiring. */
+const SEED={
+  groups:[{id:1,name:"KI-21",course:"3",students:25},{id:2,name:"DI-22",course:"2",students:28},{id:3,name:"IQ-23",course:"1",students:30}],
+  rooms:[{id:11,name:"101",cap:120,kind:"Ma’ruza"},{id:12,name:"204",cap:30,kind:"Amaliy"},{id:13,name:"310",cap:24,kind:"Kompyuter xonasi"}],
+  teachers:[{id:21,name:"Karimov Aziz Bahodirovich",dept:"Dasturiy injiniring",phone:"+998 90 123 45 67"},{id:22,name:"Sobirova Sabohat",dept:"Matematika",phone:"+998 91 234 56 78"},{id:23,name:"Toshmatov Jasur Olimovich",dept:"Axborot tizimlari",phone:"+998 93 345 67 89"}],
+  subjects:[{id:31,name:"Ma’lumotlar bazasi",hours:72,kind:"Ma’ruza"},{id:32,name:"Oliy matematika",hours:90,kind:"Amaliy"},{id:33,name:"Web dasturlash",hours:60,kind:"Laboratoriya"}],
+  lessons:[
+    {id:41,group:1,subject:31,teacher:21,room:11,day:"Dushanba",start:"09:00",end:"10:20"},
+    {id:42,group:2,subject:32,teacher:22,room:12,day:"Seshanba",start:"10:30",end:"11:50"},
+    {id:43,group:3,subject:33,teacher:23,room:13,day:"Chorshanba",start:"13:00",end:"14:20"}]
+};
+if(db._seeded!==2){db=JSON.parse(JSON.stringify(SEED));db._seeded=2;}
+Object.keys(MENUS).forEach(k=>db[k]=db[k]||[]);
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}};
+const $=id=>document.getElementById(id);
+let cur="groups",editId=null;
+
+function show(v,f){ // ref maydonlari uchun nom ko'rsatish
+  if(f.ref){const r=db[f.ref].find(x=>x.id==v);return r?r.name:"—"}
+  return v??"";
+}
+function renderNav(){
+  $("nav").innerHTML="";
+  for(const k in MENUS){
+    const b=document.createElement("button");
+    b.className=k===cur?"on":"";
+    b.innerHTML=MENUS[k].label+"<span>"+db[k].length+"</span>";
+    b.onclick=()=>{cur=k;$("q").value="";render()};
+    $("nav").append(b);
+  }
+}
+function render(){
+  const m=MENUS[cur];
+  $("title").textContent=m.label;
+  $("thead").innerHTML="<tr><th>#</th>"+m.fields.map(f=>"<th>"+f.l+"</th>").join("")+"<th></th></tr>";
+  const q=$("q").value.toLowerCase();
+  const rows=db[cur].filter(r=>!q||m.fields.some(f=>String(show(r[f.k],f)).toLowerCase().includes(q)));
+  $("tbody").innerHTML="";
+  rows.forEach((r,i)=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML="<td>"+(i+1)+"</td>"+m.fields.map(f=>"<td></td>").join("")+
+      '<td class="act"><button class="btn">Tahrirlash</button> <button class="btn del">O‘chirish</button></td>';
+    m.fields.forEach((f,j)=>tr.children[j+1].textContent=show(r[f.k],f));
+    const [e,d]=tr.querySelectorAll("button");
+    e.onclick=()=>open(r.id);
+    d.onclick=()=>{if(confirm("Bu "+m.single+" o‘chirilsinmi?")){db[cur]=db[cur].filter(x=>x.id!==r.id);save();render()}};
+    $("tbody").append(tr);
+  });
+  const em=$("empty");
+  em.hidden=rows.length>0;
+  em.textContent=db[cur].length?"Hech narsa topilmadi.":"Hozircha "+m.single+" yo‘q. “Qo‘shish” tugmasi bilan birinchisini kiriting.";
+  renderNav();
+}
+function open(id){
+  const m=MENUS[cur];editId=id||null;
+  const rec=id?db[cur].find(x=>x.id===id):{};
+  $("dtitle").textContent=(id?"Tahrirlash: ":"Yangi ")+m.single;
+  $("fields").innerHTML="";
+  m.fields.forEach(f=>{
+    const l=document.createElement("label");l.textContent=f.l;l.htmlFor="f_"+f.k;
+    let el;
+    if(f.type==="select"){
+      el=document.createElement("select");
+      const opts=f.ref?db[f.ref].map(x=>[x.id,x.name]):f.options.map(x=>[x,x]);
+      if(!opts.length){el.innerHTML='<option value="">Avval “'+MENUS[f.ref].label+'” menyusiga qo‘shing</option>'}
+      opts.forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;el.append(o)});
+    }else{el=document.createElement("input");el.type=f.type}
+    el.id="f_"+f.k;el.required=true;
+    if(rec[f.k]!==undefined)el.value=rec[f.k];
+    $("fields").append(l,el);
+  });
+  $("dlg").showModal();
+}
+$("add").onclick=()=>open();
+$("cancel").onclick=()=>$("dlg").close();
+$("q").oninput=render;
+$("form").onsubmit=()=>{
+  const m=MENUS[cur],rec={};
+  m.fields.forEach(f=>{const v=$("f_"+f.k).value;rec[f.k]=f.type==="number"?Number(v):(f.ref?Number(v):v)});
+  if(editId){Object.assign(db[cur].find(x=>x.id===editId),rec)}
+  else{rec.id=Date.now();db[cur].push(rec)}
+  save();render();
+};
+render();
+</script>
+</body>
+</html>
